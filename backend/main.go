@@ -183,7 +183,8 @@ func handle(ctx context.Context,method string,p params)(any,error){
   return svnChanges(s)
  case "vcs/diff":
   a:=[]string{"diff","--internal-diff"}
-  if f!=""{a=append(a,"--",f+"@")}else{a=append(a,".")}
+  // Working-copy diff without explicit revisions takes literal paths, not peg syntax.
+  if f!=""{a=append(a,"--",f)}else{a=append(a,".")}
   s,e:=svn(ctx,r.Path,a...)
   return map[string]string{"working":s},e
  case "vcs/log":return svn(ctx,r.Path,"log","--limit","50",".")
