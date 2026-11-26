@@ -62,3 +62,63 @@ func discoverSqlTarget(ctx context.Context, p params) (sqlTarget,error) {
  }
  return result,nil
 }
+
+const decorationLimit = 10000
+type sqlDecoration struct {
+ Path string `json:"path"`
+ Badge string `json:"badge"`
+}
+
+func sqlDecorationBadge(kind,status string) string {
+ if kind=="git" {
+  switch status {
+  case "DD","AU","UD","UA","DU","AA","UU":return "C"
+  case "??":return "?"
+  case "!!":return ""
+  }
+  for _,code:=range []string{"U","D","R","A","C","M","T"}{
+   if strings.Contains(status,code){
+    switch code{case "U":return "C";case "C":return "A";case "T":return "M";default:return code}
+   }
+  }
+  return ""
+ }
+ if strings.Contains(status,"conflict"){return "C"}
+ switch strings.SplitN(status," / ",2)[0]{
+ case "unversioned":return "?"
+ case "added":return "A"
+ case "deleted":return "D"
+ case "replaced":return "R"
+ case "missing","obstructed","incomplete":return "!"
+ case "modified":return "M"
+ }
+ if strings.Contains(status,"props modified"){return "M"}
+ return ""
+}
+
+// Only return descendants of the explicitly activated SQL folder. No SQL text,
+// repository credentials or unrelated repository paths are returned to the host.
+func sqlDecorations(ctx context.Context,p params)([]sqlDecoration,error){
+ if p.Kind!="folder"{return nil,errors.New("SQL decoration scope must be a folder")}
+ selected,err:=discoverSqlTarget(ctx,p)
+ if err!=nil{return nil,err}
+ scope,err:=filepath.EvalSymlinks(filepath.Clean(p.Path))
+ if err!=nil{return nil,err}
+ r:=selected.Repository
+ value,err:=handle(ctx,"vcs/status",params{Kind:r.Kind,Path:r.Path})
+ if err!=nil{return nil,err}
+ rows,ok:=value.([]change)
+ if !ok{return nil,errors.New("invalid status result")}
+ result:=[]sqlDecoration{}
+ for _,row:=range rows{
+  badge:=sqlDecorationBadge(r.Kind,row.Status)
+  if badge==""{continue}
+  path:=filepath.FromSlash(row.Path)
+  if !filepath.IsLocal(path){continue}
+  rel,e:=filepath.Rel(scope,filepath.Join(r.Path,path))
+  if e!=nil||rel=="."||!filepath.IsLocal(rel){continue}
+  if len(result)>=decorationLimit{return nil,errors.New("too many SQL file decorations")}
+  result=append(result,sqlDecoration{Path:filepath.Join(filepath.Clean(p.Path),rel),Badge:badge})
+ }
+ return result,nil
+}
