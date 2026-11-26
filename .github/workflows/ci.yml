@@ -1,0 +1,76 @@
+name: Validate and package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache: false
+      - name: Install SVN on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y subversion
+          svn --version --quiet
+          svnadmin --version --quiet
+      - name: Run backend tests
+        working-directory: backend
+        run: go test -v ./...
+      - name: Static analysis
+        working-directory: backend
+        run: go vet ./...
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: node --check ui/app.js
+  windows-package:
+    needs: backend
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Windows x64 sidecar
+        shell: pwsh
+        run: |
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'amd64'
+          $env:CGO_ENABLED = '0'
+          New-Item -ItemType Directory -Force bin/windows-x64 | Out-Null
+          go -C backend build -trimpath -o ../bin/windows-x64/backend.exe .
+      - name: Package unsigned DBX candidate
+        shell: pwsh
+        run: |
+          npm install --global @dbx-app/plugin-cli
+          dbx-plugin package . --target windows-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Get-ChildItem dist -Filter *.dbxp)) { throw 'No DBX package produced' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbx-vcs-windows-x64-unsigned
+          path: |
+            dist/*.dbxp
+            dist/*.artifact.json
+          if-no-files-found: error
