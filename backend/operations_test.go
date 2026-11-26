@@ -130,6 +130,8 @@ func TestWriteSVN(t *testing.T) {
  {
   write(wc,"changed locally\n")
   assertStatus("modified")
+  decorations, err := sqlDecorations(ctx, params{Kind:"folder",Path:wc})
+  if err != nil || len(decorations) != 1 || decorations[0].Badge != "M" || decorations[0].Path != filepath.Join(wc,file) { t.Fatalf("%+v %v",decorations,err) }
   diff := query("diff",file).(map[string]string)["working"]
   if !strings.Contains(diff,"-initial") || !strings.Contains(diff,"+changed locally") { t.Fatal(diff) }
   op("commit",file,"second revision")
