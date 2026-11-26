@@ -17,7 +17,7 @@ import (
 )
 
 const pluginID = "io.github.code-new-bie.vcs"
-const version = "0.2.1"
+const version = "0.2.2"
 const maxOutput = 2 * 1024 * 1024
 
 type repo struct {
@@ -160,6 +160,7 @@ var errMethod=errors.New("method not found")
 func handle(ctx context.Context,method string,p params)(any,error){
  switch method{
  case "vcs/discover":return discoverSqlTarget(ctx,p)
+ case "sqlFile/decorations/"+pluginID+".sql-folder":return sqlDecorations(ctx,p)
  case "vcs/write":return writeOperation(ctx,p)
  case "vcs/tools":
   result:=map[string]bool{}
