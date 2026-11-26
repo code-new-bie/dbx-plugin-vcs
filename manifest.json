@@ -2,9 +2,9 @@
   "manifest_version": 1,
   "id": "io.github.code-new-bie.vcs",
   "name": "VCS Manager",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "code-new-bie",
-  "description": "Manage trusted local Git and SVN working copies.",
+  "description": "Version control for DBX external SQL files (experimental native integration).",
   "icon": "assets/plugin.svg",
   "source": "https://github.com/code-new-bie/dbx-plugin-vcs",
   "engines": {
@@ -34,6 +34,55 @@
       "id": "io.github.code-new-bie.vcs.main",
       "label": "VCS Manager",
       "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "context-menu",
+      "id": "io.github.code-new-bie.vcs.sql-file",
+      "menu": "sql-file",
+      "label": "Git / SVN — SQL 文件版本控制",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "io.github.code-new-bie.vcs.main"
+      }
+    },
+    {
+      "type": "context-menu",
+      "id": "io.github.code-new-bie.vcs.sql-folder",
+      "menu": "sql-folder",
+      "label": "Git / SVN — SQL 目录版本控制",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "io.github.code-new-bie.vcs.main"
+      }
+    },
+    {
+      "type": "command",
+      "id": "vcs-panel",
+      "label": "版本控制",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "io.github.code-new-bie.vcs.main",
+        "presentation": "panel"
+      }
+    },
+    {
+      "type": "menus",
+      "id": "io.github.code-new-bie.vcs.menus",
+      "items": [
+        {
+          "location": "appToolbar",
+          "command": "vcs-panel",
+          "group": "primary",
+          "order": 100,
+          "default_visible": true
+        },
+        {
+          "location": "commandPalette",
+          "command": "vcs-panel",
+          "group": "primary",
+          "order": 100
+        }
+      ]
     }
   ],
   "$schema": "https://raw.githubusercontent.com/t8y2/dbx/main/plugins/manifest.schema.json"
