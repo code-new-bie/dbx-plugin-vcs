@@ -136,10 +136,24 @@ func svnChanges(raw string)([]change,error){
 }
 func fileArg(root,file string)(string,error){
  if file==""{return "",nil}
- if filepath.IsAbs(file)||filepath.VolumeName(file)!=""{return "",errors.New("relative file required")}
- file=filepath.Clean(file)
- if file==".."||strings.HasPrefix(file,".."+string(filepath.Separator))||file=="."{return "",errors.New("file outside repository")}
+ // Reject rooted and drive-relative paths on every platform.
+ if filepath.IsAbs(file)||filepath.VolumeName(file)!=""||strings.HasPrefix(file,"/")||strings.HasPrefix(file,"\\")||
+ (len(file)>=2&&file[1]==':'){return "",errors.New("relative file required")}
  if strings.ContainsAny(file,"\x00\r\n"){return "",errors.New("unsupported file name")}
+ // Detect traversal with either separator, without rewriting legitimate
+ // backslashes in Unix filenames.
+ for _,part:=range strings.Split(strings.ReplaceAll(file,"\\","/"),"/"){
+  if part==".."{return "",errors.New("file outside repository")}
+ }
+ file=filepath.Clean(file)
+ if file=="."||!filepath.IsLocal(file){return "",errors.New("file outside repository")}
+ // Git and SVN handle symlinks as versioned entries; do not resolve the
+ // final path to its target. Reject symlinked ancestor directories instead.
+ for parent:=filepath.Dir(file);parent!=".";parent=filepath.Dir(parent){
+  info,err:=os.Lstat(filepath.Join(root,parent))
+  if err!=nil{if os.IsNotExist(err){continue};return "",err}
+  if info.Mode()&os.ModeSymlink!=0{return "",errors.New("symlinked ancestor directory")}
+ }
  return file,nil
 }
 var errMethod=errors.New("method not found")
@@ -183,7 +197,8 @@ func handle(ctx context.Context,method string,p params)(any,error){
   return svnChanges(s)
  case "vcs/diff":
   a:=[]string{"diff","--internal-diff"}
-  if f!=""{a=append(a,"--",f+"@")}else{a=append(a,".")}
+  // Working-copy diff without explicit revisions takes literal paths, not peg syntax.
+  if f!=""{a=append(a,"--",f)}else{a=append(a,".")}
   s,e:=svn(ctx,r.Path,a...)
   return map[string]string{"working":s},e
  case "vcs/log":return svn(ctx,r.Path,"log","--limit","50",".")

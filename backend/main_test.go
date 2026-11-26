@@ -8,7 +8,26 @@ func TestSVNChanges(t *testing.T){
  c,e:=svnChanges(`<status><target path="."><entry path="a.txt"><wc-status item="modified" props="modified"/></entry><entry path="b.txt"><wc-status item="conflicted" props="none" tree-conflicted="true"/></entry></target></status>`)
  if e!=nil||len(c)!=2||c[1].Status!="conflicted / tree conflict"{t.Fatalf("%+v %v",c,e)}
 }
-func TestPath(t *testing.T){for _,p:=range []string{"../outside","/etc/passwd","."}{if _,e:=fileArg("/tmp/repo",p);e==nil{t.Fatal(p)}}}
+func TestPath(t *testing.T){
+ root:=t.TempDir()
+ for _,p:=range []string{"../outside","/etc/passwd",".","\\Windows\\System32","C:\\Windows\\System32","C:relative","\\\\server\\share\\file","//server/share/file","a/../../outside","a\\..\\..\\outside","a/../file","bad\x00file","bad\nfile"}{
+  if _,e:=fileArg(root,p);e==nil{t.Errorf("accepted unsafe path %q",p)}
+ }
+ for _,p:=range []string{"","hello @ world.txt","中文.txt","nested/file.txt","-name.txt"}{
+  got,e:=fileArg(root,p)
+  want:=p
+  if p!=""{want=filepath.Clean(p)}
+  if e!=nil||got!=want{t.Errorf("path %q: got %q, error %v",p,got,e)}
+ }
+}
+func TestSymlinkAncestor(t *testing.T){
+ root:=t.TempDir()
+ outside:=t.TempDir()
+ if err:=os.Symlink(outside,filepath.Join(root,"linked"));err!=nil{t.Skipf("symlink unavailable: %v",err)}
+ if _,err:=fileArg(root,"linked/file.txt");err==nil{t.Fatal("accepted symlinked ancestor")}
+ if _,err:=fileArg(root,"linked");err!=nil{t.Fatalf("symlink entry itself must be permitted: %v",err)}
+}
+
 func TestRPC(t *testing.T){
  r:=respond([]byte(`{"jsonrpc":"2.0","id":1,"method":"plugin/initialize","params":{"host":{"protocolVersions":[1]}}}`))
  if r["error"]!=nil||r["result"]==nil{t.Fatal(r)}

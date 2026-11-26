@@ -8,7 +8,8 @@
   "icon": "assets/plugin.svg",
   "source": "https://github.com/code-new-bie/dbx-plugin-vcs",
   "engines": {
-    "host_api": "1"
+    "host_api": "1",
+    "dbx": ">=0.5.68"
   },
   "permissions": [
     "host.workbench",
@@ -24,7 +25,7 @@
         1
       ],
       "transport": "stdio-jsonl",
-      "executable": "bin/windows-x64/backend.exe"
+      "executable": "bin/dbx-plugin-vcs"
     }
   },
   "contributions": [
