@@ -4,6 +4,8 @@ import (
  "context"
  "os"
  "os/exec"
+ "net/url"
+ "runtime"
  "path/filepath"
  "strings"
  "testing"
@@ -28,14 +30,120 @@ func TestWriteGit(t *testing.T) {
  p.Action="reset";if _,e:=writeOperation(ctx,p);e==nil{t.Fatal("unsupported action accepted")}
 }
 
-func TestWriteSVN(t *testing.T){
- if _,e:=exec.LookPath("svn");e!=nil{t.Skip(e)};if _,e:=exec.LookPath("svnadmin");e!=nil{t.Skip(e)}
- ctx:=context.Background();base:=t.TempDir();r:=filepath.Join(base,"repo");wc:=filepath.Join(base,"wc")
- if _,e:=run(ctx,base,"svnadmin","create",r);e!=nil{t.Fatal(e)}
- url:="file://"+filepath.ToSlash(r);if !strings.HasPrefix(filepath.ToSlash(r),"/"){url="file:///"+filepath.ToSlash(r)}
- if _,e:=svn(ctx,base,"checkout",url,wc);e!=nil{t.Fatal(e)}
- file:="test.txt";if e:=os.WriteFile(filepath.Join(wc,file),[]byte("test\n"),0600);e!=nil{t.Fatal(e)}
- p:=params{Kind:"svn",Path:wc,File:file,Action:"add",Confirmed:true}
- if _,e:=writeOperation(ctx,p);e!=nil{t.Fatal(e)};p.Action="commit";p.Message="initial";if _,e:=writeOperation(ctx,p);e!=nil{t.Fatal(e)}
- p.Action="update";p.File="";if _,e:=writeOperation(ctx,p);e!=nil{t.Fatal(e)}
+// CI must never silently skip SVN validation.
+func requireSVN(t *testing.T) {
+ t.Helper()
+ for _, tool := range []string{"svn", "svnadmin"} {
+  if _, err := exec.LookPath(tool); err != nil {
+   if os.Getenv("DBX_REQUIRE_SVN") == "1" { t.Fatalf("%s required: %v", tool, err) }
+   t.Skipf("%s unavailable: %v", tool, err)
+  }
+ }
+}
+
+func TestWriteSVN(t *testing.T) {
+ requireSVN(t)
+ ctx := context.Background()
+ base := t.TempDir()
+ root := filepath.Join(base, "repo with spaces")
+ wc := filepath.Join(base, "wc")
+ other := filepath.Join(base, "other")
+ if _, err := run(ctx, base, "svnadmin", "create", root); err != nil { t.Fatal(err) }
+ path := filepath.ToSlash(root)
+ if runtime.GOOS == "windows" { path = "/" + path }
+ remote := (&url.URL{Scheme:"file", Path:path}).String()
+ s := func(dir string, args ...string) string {
+  t.Helper()
+  out, err := svn(ctx, dir, args...)
+  if err != nil { t.Fatal(err) }
+  return out
+ }
+ s(base, "checkout", remote, wc)
+ s(base, "checkout", remote, other)
+ file := "hello @ world.txt"
+ write := func(dir, body string) {
+  t.Helper()
+  if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0600); err != nil { t.Fatal(err) }
+ }
+ read := func(dir string) string {
+  t.Helper()
+  b, err := os.ReadFile(filepath.Join(dir,file))
+  if err != nil { t.Fatal(err) }
+  return string(b)
+ }
+ p := params{Kind:"svn", Path:wc}
+ query := func(method, file string) any {
+  t.Helper()
+  q := p; q.File = file
+  result, err := handle(ctx, "vcs/"+method, q)
+  if err != nil { t.Fatal(err) }
+  return result
+ }
+ op := func(action, file, message string) {
+  t.Helper()
+  q := p; q.Action = action; q.File = file; q.Message = message; q.Confirmed = true
+  if _, err := writeOperation(ctx, q); err != nil { t.Fatal(err) }
+ }
+ assertStatus := func(want string) {
+  t.Helper()
+  rows := query("status", "").([]change)
+  for _, row := range rows {
+   if filepath.ToSlash(row.Path) == file && strings.Contains(row.Status, want) { return }
+  }
+  t.Fatalf("expected %s for %q, got %+v",want,file,rows)
+ }
+ assertClean := func() {
+  t.Helper()
+  if rows := query("status", "").([]change); len(rows) != 0 { t.Fatalf("expected clean working copy, got %+v",rows) }
+ }
+ t.Run("inspect_and_unversioned",func(t *testing.T){
+  got := query("inspect","").(repo)
+  want, err := filepath.EvalSymlinks(wc)
+  if err != nil { t.Fatal(err) }
+  if got.Kind != "svn" || filepath.Clean(got.Path) != filepath.Clean(want) { t.Fatalf("unexpected repository: %+v",got) }
+  assertClean()
+  write(wc,"initial\n")
+  assertStatus("unversioned")
+ })
+ t.Run("confirmation_and_add",func(t *testing.T){
+  q := p; q.Action = "add"; q.File = file
+  if _, err := writeOperation(ctx,q); err == nil { t.Fatal("unconfirmed write accepted") }
+  assertStatus("unversioned")
+  op("add",file,"")
+  assertStatus("added")
+ })
+ t.Run("commit_and_log",func(t *testing.T){
+  op("commit",file,"initial revision")
+  assertClean()
+  // Update the root so SVN log from '.' includes the file commit.
+  op("update","","")
+  if log := query("log","").(string); !strings.Contains(log,"initial revision") { t.Fatal(log) }
+  s(other,"update")
+  if got := read(other); got != "initial\n" { t.Fatal(got) }
+ })
+ t.Run("diff_and_commit",func(t *testing.T){
+  write(wc,"changed locally\n")
+  assertStatus("modified")
+  diff := query("diff",file).(map[string]string)["working"]
+  if !strings.Contains(diff,"-initial") || !strings.Contains(diff,"+changed locally") { t.Fatal(diff) }
+  op("commit",file,"second revision")
+  assertClean()
+ })
+ t.Run("update_from_second_working_copy",func(t *testing.T){
+  s(other,"update")
+  write(other,"changed remotely\n")
+  s(other,"commit","-m","remote revision","--",file+"@")
+  op("update","","")
+  if got := read(wc); got != "changed remotely\n" { t.Fatal(got) }
+  assertClean()
+  if log := query("log","").(string); !strings.Contains(log,"remote revision") { t.Fatal(log) }
+ })
+ t.Run("conflict_is_preserved",func(t *testing.T){
+  write(wc,"local conflict\n")
+  write(other,"remote conflict\n")
+  s(other,"commit","-m","conflicting revision","--",file+"@")
+  op("update","","")
+  assertStatus("conflicted")
+  if got := read(wc); !strings.Contains(got,"local conflict") || !strings.Contains(got,"remote conflict") { t.Fatal(got) }
+ })
 }
