@@ -96,7 +96,8 @@ func TestWriteSVN(t *testing.T) {
   t.Helper()
   if rows := query("status", "").([]change); len(rows) != 0 { t.Fatalf("expected clean working copy, got %+v",rows) }
  }
- t.Run("inspect_and_unversioned",func(t *testing.T){
+ t.Log("inspect_and_unversioned")
+ {
   got := query("inspect","").(repo)
   want, err := filepath.EvalSymlinks(wc)
   if err != nil { t.Fatal(err) }
@@ -104,15 +105,17 @@ func TestWriteSVN(t *testing.T) {
   assertClean()
   write(wc,"initial\n")
   assertStatus("unversioned")
- })
- t.Run("confirmation_and_add",func(t *testing.T){
+ }
+ t.Log("confirmation_and_add")
+ {
   q := p; q.Action = "add"; q.File = file
   if _, err := writeOperation(ctx,q); err == nil { t.Fatal("unconfirmed write accepted") }
   assertStatus("unversioned")
   op("add",file,"")
   assertStatus("added")
- })
- t.Run("commit_and_log",func(t *testing.T){
+ }
+ t.Log("commit_and_log")
+ {
   op("commit",file,"initial revision")
   assertClean()
   // Update the root so SVN log from '.' includes the file commit.
@@ -120,16 +123,18 @@ func TestWriteSVN(t *testing.T) {
   if log := query("log","").(string); !strings.Contains(log,"initial revision") { t.Fatal(log) }
   s(other,"update")
   if got := read(other); got != "initial\n" { t.Fatal(got) }
- })
- t.Run("diff_and_commit",func(t *testing.T){
+ }
+ t.Log("diff_and_commit")
+ {
   write(wc,"changed locally\n")
   assertStatus("modified")
   diff := query("diff",file).(map[string]string)["working"]
   if !strings.Contains(diff,"-initial") || !strings.Contains(diff,"+changed locally") { t.Fatal(diff) }
   op("commit",file,"second revision")
   assertClean()
- })
- t.Run("update_from_second_working_copy",func(t *testing.T){
+ }
+ t.Log("update_from_second_working_copy")
+ {
   s(other,"update")
   write(other,"changed remotely\n")
   s(other,"commit","-m","remote revision","--",file+"@")
@@ -137,13 +142,14 @@ func TestWriteSVN(t *testing.T) {
   if got := read(wc); got != "changed remotely\n" { t.Fatal(got) }
   assertClean()
   if log := query("log","").(string); !strings.Contains(log,"remote revision") { t.Fatal(log) }
- })
- t.Run("conflict_is_preserved",func(t *testing.T){
+ }
+ t.Log("conflict_is_preserved")
+ {
   write(wc,"local conflict\n")
   write(other,"remote conflict\n")
   s(other,"commit","-m","conflicting revision","--",file+"@")
   op("update","","")
   assertStatus("conflicted")
   if got := read(wc); !strings.Contains(got,"local conflict") || !strings.Contains(got,"remote conflict") { t.Fatal(got) }
- })
+ }
 }
