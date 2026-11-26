@@ -1,0 +1,38 @@
+{
+  "manifest_version": 1,
+  "id": "io.github.code-new-bie.vcs",
+  "name": "VCS Manager",
+  "version": "0.1.0",
+  "publisher": "code-new-bie",
+  "description": "Browse trusted Git and SVN working copies.",
+  "icon": "assets/plugin.svg",
+  "source": "https://github.com/code-new-bie/dbx-plugin-vcs",
+  "engines": {
+    "host_api": "1"
+  },
+  "permissions": [
+    "host.workbench",
+    "host.storage"
+  ],
+  "entrypoints": {
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    },
+    "backend": {
+      "protocol_versions": [
+        1
+      ],
+      "transport": "stdio-jsonl",
+      "executable": "bin/windows-x64/backend.exe"
+    }
+  },
+  "contributions": [
+    {
+      "type": "workbench",
+      "id": "io.github.code-new-bie.vcs.main",
+      "label": "VCS Manager",
+      "icon": "assets/plugin.svg"
+    }
+  ]
+}

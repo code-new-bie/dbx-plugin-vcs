@@ -1,0 +1,17 @@
+"use strict";
+const $=id=>document.getElementById(id);
+let host,repos=[],active=null,busy=false;
+const invoke=(method,p={})=>host.invoke("vcs/"+method,p,{timeoutMs:60000});
+function notify(s){$("notice").textContent=s;}
+function output(s){$("output").textContent=s||"（无内容）";}
+function showDiff(d){const parts=[["工作区",d.working],["暂存区",d.staged]].filter(x=>x[1]!==undefined);const pre=$("output");pre.replaceChildren();for(const [name,text] of parts){const h=document.createElement("strong");h.textContent=name+"\n";pre.append(h);for(const line of (text||"（无差异）").split("\n")){const span=document.createElement("span");span.textContent=line+"\n";if(line.startsWith("+")&&!line.startsWith("+++"))span.className="added";if(line.startsWith("-")&&!line.startsWith("---"))span.className="removed";pre.append(span);}}}
+async function task(fn){if(busy)return;busy=true;document.querySelectorAll("button").forEach(b=>b.disabled=true);notify("处理中…");try{await fn();notify("");}catch(e){notify(String(e?.message||e));}finally{busy=false;document.querySelectorAll("button").forEach(b=>b.disabled=false);$("branches").disabled=active?.kind!=="git";}}
+async function save(){if(host.capabilities?.storage)await host.storage.set("repositories",repos);}
+function renderRepos(){const root=$("repos");root.replaceChildren();for(const r of repos){const row=document.createElement("div"),b=document.createElement("button"),del=document.createElement("button");b.textContent=r.kind.toUpperCase()+" · "+r.path;b.className=r===active?"active":"";b.onclick=()=>task(async()=>{active=r;renderRepos();await status();});del.textContent="×";del.title="仅移除收藏，不删除文件";del.onclick=()=>task(async()=>{repos=repos.filter(x=>x!==r);if(active===r){active=null;$("title").textContent="请选择仓库";$("changes").replaceChildren();output("");}renderRepos();await save();});row.append(b,del);root.append(row);}}
+async function status(){if(!active)throw Error("请选择仓库");$("title").textContent=active.path;$("changes").replaceChildren();output("");const rows=await invoke("status",active);for(const c of rows){const b=document.createElement("button");b.textContent=c.status+"  "+c.path+(c.original?" ← "+c.original:"");b.onclick=()=>task(async()=>showDiff(await invoke("diff",{...active,file:c.path})));$("changes").append(b);}if(!rows.length)output("工作区无变更");}
+$("add").onsubmit=e=>{e.preventDefault();task(async()=>{const r=await invoke("inspect",{kind:$("kind").value,path:$("path").value.trim()});active=repos.find(x=>x.kind===r.kind&&x.path===r.path)||r;if(!repos.includes(active))repos.push(active);renderRepos();await save();await status();});};
+$("refresh").onclick=()=>task(status);
+$("history").onclick=()=>task(async()=>{if(!active)throw Error("请选择仓库");$("changes").replaceChildren();output(await invoke("log",active));});
+$("branches").onclick=()=>task(async()=>{if(active?.kind!=="git")throw Error("仅支持 Git 分支");$("changes").replaceChildren();output(await invoke("branches",active));});
+$("allDiff").onclick=()=>task(async()=>{if(!active)throw Error("请选择仓库");showDiff(await invoke("diff",active));});
+(async()=>{host=window.dbxPlugin;if(!host){notify("请通过 DBX 工作台或官方开发宿主打开。");return;}await host.ready;const t=await invoke("tools");$("tools").textContent="Git "+(t.git?"✓":"未安装")+" · SVN "+(t.svn?"✓":"未安装");if(host.capabilities?.storage){const data=await host.storage.get("repositories");if(Array.isArray(data))repos=data.filter(r=>["git","svn"].includes(r.kind)&&typeof r.path==="string");}renderRepos();$("branches").disabled=true;})().catch(e=>notify(String(e?.message||e)));

@@ -1,0 +1,4 @@
+/bin/
+/dist/
+/.dbx-dev/
+*.exe
