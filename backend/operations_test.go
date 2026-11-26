@@ -105,6 +105,8 @@ func TestWriteSVN(t *testing.T) {
   assertClean()
   write(wc,"initial\n")
   assertStatus("unversioned")
+  discovered, err := discoverSqlTarget(ctx, params{Kind:"file",Path:filepath.Join(wc,file)})
+  if err != nil || discovered.Repository.Kind != "svn" || discovered.File != file { t.Fatalf("%+v %v",discovered,err) }
  }
  t.Log("confirmation_and_add")
  {
