@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "io.github.code-new-bie.vcs",
   "name": "VCS Manager",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "code-new-bie",
   "description": "Version control for DBX external SQL files (experimental native integration).",
   "icon": "assets/plugin.svg",
@@ -53,7 +53,8 @@
       "action": {
         "type": "open-workbench",
         "workbench": "io.github.code-new-bie.vcs.main"
-      }
+      },
+      "decorations": true
     },
     {
       "type": "command",
