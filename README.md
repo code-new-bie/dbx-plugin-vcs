@@ -19,13 +19,13 @@ Git / SVN workbench plugin for DBX. 初始开发版本 0.2.0（开发候选，�
 cd backend
 go test ./...
 cd ..
-New-Item -ItemType Directory -Force bin/windows-x64 | Out-Null
-go -C backend build -o ../bin/windows-x64/backend.exe .
 npm install -g @dbx-app/plugin-cli
 dbx-plugin dev --path . --port 5190
 # 停止开发宿主后打包候选包
-dbx-plugin package . --target windows-x64
+dbx-plugin package .
 ```
+
+CLI 根据 dbx-plugin.toml 自动编译 Go 后端，生成当前平台的安装包；无需手动构建 bin 目录。
 
 本地候选包需要在 DBX 中启用允许未签名开发包。原生 Sidecar 不受 iframe 沙箱保护；仅导入可信仓库，本版不保存认证信息。实际 DBX 安装、Windows 运行和 SVN 联调仍待验证。
 

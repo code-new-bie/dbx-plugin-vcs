@@ -83,21 +83,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Build Windows x64 sidecar
-        shell: pwsh
-        run: |
-          $env:GOOS = 'windows'
-          $env:GOARCH = 'amd64'
-          $env:CGO_ENABLED = '0'
-          New-Item -ItemType Directory -Force bin/windows-x64 | Out-Null
-          go -C backend build -trimpath -o ../bin/windows-x64/backend.exe .
       - name: Package unsigned DBX candidate
         shell: pwsh
         run: |
           npm install --global @dbx-app/plugin-cli
-          dbx-plugin package . --target windows-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Get-ChildItem dist -Filter *.dbxp)) { throw 'No DBX package produced' }
+          dbx-plugin --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dbx-plugin package .
+
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $pkg = Get-Item dist/io.github.code-new-bie.vcs-0.2.0-windows-x64.dbxp -ErrorAction Stop
+          $metadata = Get-Item dist/io.github.code-new-bie.vcs-0.2.0-windows-x64.artifact.json -ErrorAction Stop
+          $pkg | Select-Object Name,Length
+          Get-FileHash $pkg.FullName -Algorithm SHA256
+          Get-Content $metadata.FullName
       - uses: actions/upload-artifact@v4
         with:
           name: dbx-vcs-windows-x64-unsigned
