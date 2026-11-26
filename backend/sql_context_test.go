@@ -33,3 +33,34 @@ func TestDiscoverSqlTarget(t *testing.T) {
  nested,err:=discoverSqlTarget(ctx,params{Kind:"file",Path:file})
  if err!=nil||nested.File!="hello @ 中文.sql"||nested.Repository.Path!=filepath.Join(canonical,"migration"){t.Fatalf("%+v %v",nested,err)}
 }
+
+func TestSQLDecorationBadges(t *testing.T){
+ for _,tc:=range []struct{kind,status,badge string}{
+  {"git"," M","M"},{"git","A ","A"},{"git","??","?"},{"git","UU","C"},{"git"," D","D"},{"git","R ","R"},{"git","!!",""},
+  {"svn","modified","M"},{"svn","normal / props modified","M"},{"svn","modified / tree conflict","C"},{"svn","unversioned","?"},{"svn","missing","!"},{"svn","deleted","D"},
+ }{
+  if got:=sqlDecorationBadge(tc.kind,tc.status);got!=tc.badge{t.Errorf("%s %q => %q, want %q",tc.kind,tc.status,got,tc.badge)}
+ }
+}
+
+func TestGitSQLDecorations(t *testing.T){
+ if _,err:=exec.LookPath("git");err!=nil{t.Skip(err)}
+ ctx:=context.Background()
+ root:=t.TempDir()
+ dir:=filepath.Join(root,"SQL")
+ g:=func(args ...string){t.Helper();if _,err:=git(ctx,root,args...);err!=nil{t.Fatal(err)}}
+ g("init");g("config","user.name","Test");g("config","user.email","test@example.invalid")
+ if err:=os.Mkdir(dir,0700);err!=nil{t.Fatal(err)}
+ write:=func(path,body string){t.Helper();if err:=os.WriteFile(path,[]byte(body),0600);err!=nil{t.Fatal(err)}}
+ file:=filepath.Join(dir,"hello @ 中文.sql")
+ write(file,"SELECT 1;\n");g("add",".");g("commit","-m","initial")
+ write(file,"SELECT 2;\n")
+ added:=filepath.Join(dir,"new.sql");write(added,"SELECT 3;\n");g("add","SQL/new.sql")
+ write(filepath.Join(root,"outside.sql"),"SELECT 4;\n")
+ v,err:=handle(ctx,"sqlFile/decorations/"+pluginID+".sql-folder",params{Kind:"folder",Path:dir})
+ if err!=nil{t.Fatal(err)}
+ got:=map[string]string{}
+ for _,d:=range v.([]sqlDecoration){got[d.Path]=d.Badge}
+ if len(got)!=2||got[file]!="M"||got[added]!="A"{t.Fatalf("%+v",got)}
+ if _,err:=sqlDecorations(ctx,params{Kind:"file",Path:file});err==nil{t.Fatal("accepted file decoration scope")}
+}
