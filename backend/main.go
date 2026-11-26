@@ -17,7 +17,7 @@ import (
 )
 
 const pluginID = "io.github.code-new-bie.vcs"
-const version = "0.1.0"
+const version = "0.2.0"
 const maxOutput = 2 * 1024 * 1024
 
 type repo struct {
@@ -28,6 +28,9 @@ type params struct {
  Kind string `json:"kind"`
  Path string `json:"path"`
  File string `json:"file"`
+ Action string `json:"action"`
+ Message string `json:"message"`
+ Confirmed bool `json:"confirmed"`
 }
 type change struct {
  Path string `json:"path"`
@@ -142,6 +145,7 @@ func fileArg(root,file string)(string,error){
 var errMethod=errors.New("method not found")
 func handle(ctx context.Context,method string,p params)(any,error){
  switch method{
+ case "vcs/write":return writeOperation(ctx,p)
  case "vcs/tools":
   result:=map[string]bool{}
   for _,k:=range []string{"git","svn"}{_,e:=exec.LookPath(k);result[k]=e==nil}
@@ -208,7 +212,7 @@ func respond(line []byte)map[string]any{
   ok:=false
   for _,v:=range p.Host.Versions{if v==1{ok=true}}
   if !ok{return fail(-32602,"protocol 1 required")}
-  res["result"]=map[string]any{"protocolVersion":1,"capabilities":map[string]any{},"plugin":map[string]string{"id":pluginID,"version":version}}
+  res["result"]=map[string]any{"protocolVersion":1,"capabilities":[]string{},"plugin":map[string]string{"id":pluginID,"version":version}}
   return res
  case "plugin/shutdown":res["result"]=map[string]any{};return res
  }
