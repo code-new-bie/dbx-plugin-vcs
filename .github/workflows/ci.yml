@@ -86,15 +86,15 @@ jobs:
       - name: Package unsigned DBX candidate
         shell: pwsh
         run: |
-          npm install --global @dbx-app/plugin-cli
+          npm install --global @dbx-app/plugin-cli@0.1.10
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dbx-plugin --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dbx-plugin package .
 
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $pkg = Get-Item dist/io.github.code-new-bie.vcs-0.2.0-windows-x64.dbxp -ErrorAction Stop
-          $metadata = Get-Item dist/io.github.code-new-bie.vcs-0.2.0-windows-x64.artifact.json -ErrorAction Stop
+          $pkg = Get-Item dist/io.github.code-new-bie.vcs-0.2.2-windows-x64.dbxp -ErrorAction Stop
+          $metadata = Get-Item dist/io.github.code-new-bie.vcs-0.2.2-windows-x64.artifact.json -ErrorAction Stop
           $pkg | Select-Object Name,Length
           Get-FileHash $pkg.FullName -Algorithm SHA256
           Get-Content $metadata.FullName
